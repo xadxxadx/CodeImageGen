@@ -3,6 +3,7 @@ import string
 import random
 import numpy as np
 
+
 def genNoiceBG(width, height, snr):
     img = np.zeros((height, width, 3), np.uint8)
     row, col, ch = img.shape
@@ -26,7 +27,8 @@ def genNoiceBG(width, height, snr):
     #cv2.destroyAllWindows()
     return img
 
-def genDoubleSizeSingleCodeImage(width, height):
+
+def genDoubleSizeSingleCodeImage(width, height, fontSize):
     #initialize image
     bW = width * 2
     bH = height * 2
@@ -36,13 +38,14 @@ def genDoubleSizeSingleCodeImage(width, height):
 
     #put random text
     font = cv2.FONT_ITALIC
-    font_scale = 1.0 + random.random()
+    font_scale = fontSize + random.random() / 3
     thickness = 3
     size = cv2.getTextSize(text, font, font_scale, thickness)
     text_width = size[0][0]
     text_height = size[0][1]
+    color_plus = random.randint(0, 50)
     cv2.putText(img, text, (int(width - text_width / 2), int(height + text_height / 2)), font,
-                font_scale, (255, 255, 255), thickness, cv2.LINE_AA)
+                font_scale, (205 + color_plus, 205 + color_plus, 205 + color_plus), thickness, cv2.LINE_AA)
     randomRange = int(text_width / 3)
     #warpping
     pts1 = np.float32([[width - text_width/2, height - text_height/2], [width + text_width/2, height - text_height/2], [width - text_width/2, height + text_height/2]])
@@ -53,16 +56,40 @@ def genDoubleSizeSingleCodeImage(width, height):
     M = cv2.getAffineTransform(pts1, pts2)
     res = cv2.warpAffine(img, M, (bW, bH))
 
-    cv2.imshow('My Image', res)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+    #cv2.imshow('My Image', res)
+    #cv2.waitKey(0)
+    #cv2.destroyAllWindows()
 
-    return res
+    return text, res
+
+
+def getBoundaryBox(img):
+    gray_image = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    r, binaryImg = cv2.threshold(gray_image, 1, 255, cv2.THRESH_BINARY)
+    rect = cv2.boundingRect(binaryImg)
+    #cv2.rectangle(img, rect, (255,0,0), 1)
+    #cv2.imshow('My Image', img)
+    #cv2.waitKey(0)
+    #cv2.destroyAllWindows()
+    return rect
+
+def bitwiseTextOnBK(bk, textImg, rect)  :
+    blackBK = np.zeros(bk.shape, np.uint8)
+    blackBK[rect[1]:rect[1]+rect[3], rect[0]:rect[0]+rect[2]] = textImg[rect[1]:rect[1]+rect[3], rect[0]:rect[0]+rect[2]]
 
 def genCodeImage(width, height, num, shift, snr):
-    random.choice('ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789')
-    img = np.zeros((400, 400, 3), np.uint8)
-    img.fill(90)
-    text = 'Hello, OpenCV!'
-    cv2.putText(img, text, (10, 40), cv2.FONT_HERSHEY_SIMPLEX,
-                1, (0, 255, 255), 1, cv2.LINE_AA)
+    textes = []
+    rois = []
+    stepX = width / (num+1)
+    stepY = height / 2
+    bk = genNoiceBG(width, height, snr)
+    for i in range(0, num):
+        text, img = genDoubleSizeSingleCodeImage(height, height, 1.0)
+        rect = getBoundaryBox(img)
+        startX = int(stepX *(i+1) - rect[2]/2)
+        startY  = int(stepY - rect[3]/2)
+        bitwise = cv2.bitwise_or(bk[startY:startY+rect[3]-1, startX:startX+rect[2]-1] , img[rect[1]:rect[1]+rect[3] -1, rect[0]:rect[0]+rect[2] - 1])
+        bk[startY:startY+rect[3]-1, startX:startX+rect[2]-1] = bitwise
+        textes.append(text)
+        rois.append((startX, startY, rect[2], rect[3]))
+    return textes, rois, bk
